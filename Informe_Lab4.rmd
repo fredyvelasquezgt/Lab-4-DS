@@ -1,1 +1,364 @@
+---
+title: "Informe Lab 4"
+author: "Angel Higueros, Fredy Velasquez"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(wordcloud2)
+
+data<-read.csv('train_limpios.csv')
+#View(data)
+
+data[data == ""]<-NA
+
+freq<-table(data$keyword, useNA = 'no')
+#View(freq)
+
+no_disaster<-subset(x = data, subset = target == 0, select = c("keyword"))
+#View(no_disaster)
+freq_no_disaster<-table(no_disaster$keyword)
+#View(freq_no_disaster)
+tabla_ordenada1<-freq_no_disaster[order(freq_no_disaster, decreasing = TRUE, na.last = TRUE)]
+#View(tabla_ordenada1)
+h1<-head(tabla_ordenada1)
+#View(h1)
+
+disaster<-subset(x = data, subset = target == 1, select = c("keyword"))
+#View(disaster)
+freq_disaster<-table(disaster$keyword)
+#View(freq_disaster)
+tabla_ordenada2<-freq_disaster[order(freq_disaster, decreasing = TRUE, na.last = TRUE)]
+#View(tabla_ordenada2)
+h2<-head(tabla_ordenada2)
+#View(h2)
+
+w1<-wordcloud2(data = freq, size = 0.1, shape = "cloud",
+           color="random-dark", ellipticity = 0.5)
+
+w2<-wordcloud2(data = freq_no_disaster, size = 0.1, shape = "cloud",
+           color="random-dark", ellipticity = 0.5)
+
+w3<-wordcloud2(data = freq_disaster, size = 0.1, shape = "cloud",
+           color="random-dark", ellipticity = 0.5)
+```
+
+## Análisis
+
+Primero presentamos una nube de palabras de la columna "keyword" para ver la frecuancia de cada palabra.
+
+```{r}
+w1
+```
+
+También se realizó un histograma de las palabras más repetidas para ver como es la dsitribución de la mimsa.
+
+```{r}
+hist(x = freq, main = "Histograma De Palabras Más Repetidas", 
+     xlab = "Frecuencia", ylab = "",
+     col = "ivory")
+```
+
+Ahora un gráfico de las palabras que más se repiten en la categoría de "No Disaster".
+
+```{r}
+plot(x = h1, main = "No Disaster Tweets",
+     xlab = "Palabra", ylab = "Frecuencia", 
+     col = "seagreen")
+```
+
+Vemos que la palabra que más se repite en la categoría de tweets que no tratan de desastres es "body bags".
+
+Tambien se realizó una nube de palabras de esta misma categoría para ver la frecuencia de cada una.
+
+```{r}
+w2
+```
+
+Ahora vamos con las palabras que más se repiten en la categoría de "Disaster", que igual están representadas en un gráfico:
+
+```{r}
+plot(x = h2, main = "No Disaster Tweets",
+     xlab = "Palabra", ylab = "Frecuencia", 
+     col = "seagreen")
+```
+
+Se observa que la palabra que más se repite en la categoría de tweets que tratan sobre desastres es "derailment".
+
+Tambien se realizó una nube de palabras de esta misma categoría para ver la frecuencia de cada una.
+
+```{r}
+w3
+```
+
+Por lo menos en las primeras seis palabras de cada categoría no se repite ni una palabra, es decir no hay palabras que estén en ambas categorías.
+
+```{r}
+```
+
+
+```{r}
+library(tm)
+library(RWeka)
+```
+
+---
+
+## Generación de n-gramas y cálculo de sus frecuencias y probabilidades
+
+Para comprender mejor el contenido textual de los tweets, se construirán n-gramas. Los n-gramas son combinaciones contiguas de palabras en el texto. Por ejemplo, un bigrama (2-grama) para "Hola mundo" sería ("Hola", "mundo").
+
+```{r}
+# Creación de un corpus a partir de los datos de texto
+corpus <- Corpus(VectorSource(data$text))
+
+# Definición del Tokenizer para bigramas
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+
+# Creación de la matriz de términos de documento para los bigramas
+tdm <- TermDocumentMatrix(corpus, control = list(tokenize = BigramTokenizer))
+
+# Convertir a matriz y obtener las frecuencias
+matrix <- as.matrix(tdm)
+bigram_freq <- sort(rowSums(matrix), decreasing = TRUE)
+
+# Convertir las frecuencias a un dataframe
+bigram_df <- data.frame(bigram = names(bigram_freq), frequency = bigram_freq)
+
+# Cálculo de las probabilidades
+total_bigrams <- sum(bigram_df$frequency)
+bigram_df$probability <- bigram_df$frequency / total_bigrams
+
+# Mostrar los bigramas más comunes como ejemplo
+head(bigram_df)
+
+```
+```{r}
+library(ggplot2)
+
+```
+```{r}
+library(ggplot2)
+library(tm)
+library(RWeka)
+library(SnowballC)
+
+# Cargar y preparar el corpus
+corpus <- Corpus(VectorSource(data$text))
+
+# Limpiar y transformar el texto: Convertir a minúsculas, eliminar puntuación y números, y quitar stop words
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("en"))
+
+# Tokenizer para unigramas
+UnigramTokenizer <- function(x) unlist(strsplit(as.character(x), " "))
+
+# Tokenizer para bigramas
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+
+# Creación de la matriz de términos de documento para unigramas
+tdm_uni <- TermDocumentMatrix(corpus, control = list(tokenize = UnigramTokenizer))
+matrix_uni <- as.matrix(tdm_uni)
+unigram_freq <- sort(rowSums(matrix_uni), decreasing = TRUE)
+
+# Creación de la matriz de términos de documento para bigramas
+tdm_bi <- TermDocumentMatrix(corpus, control = list(tokenize = BigramTokenizer))
+matrix_bi <- as.matrix(tdm_bi)
+bigram_freq <- sort(rowSums(matrix_bi), decreasing = TRUE)
+
+# Convertir las frecuencias a dataframes
+unigram_df <- data.frame(word = names(unigram_freq), frequency = unigram_freq)
+bigram_df <- data.frame(word = names(bigram_freq), frequency = bigram_freq)
+
+# Gráfico de barras para unigramas
+ggplot(head(unigram_df, 10), aes(x = reorder(word, -frequency), y = frequency)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 10 Unigramas", x = "Unigramas", y = "Frecuencia")
+
+# Gráfico de barras para bigramas
+ggplot(head(bigram_df, 10), aes(x = reorder(word, -frequency), y = frequency)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 10 Bigramas", x = "Bigramas", y = "Frecuencia")
+
+
+```
+```{r}
+# Bibliotecas necesarias
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(wordcloud2)
+library(tm)
+library(RWeka)
+library(SnowballC)
+
+# Leer datos
+data <- read.csv('train_limpios.csv')
+data[data == ""] <- NA
+
+# Exploración básica
+summary(data)
+
+# Función para limpiar texto
+clean_text <- function(text) {
+  corpus <- Corpus(VectorSource(text))
+  corpus <- tm_map(corpus, content_transformer(tolower))
+  corpus <- tm_map(corpus, removePunctuation)
+  corpus <- tm_map(corpus, removeNumbers)
+  corpus <- tm_map(corpus, removeWords, stopwords("en"))
+  return(unlist(strsplit(as.character(corpus), " ")))
+}
+
+# Crear un nuevo dataframe limpiando el texto
+data$clean_text <- sapply(data$text, clean_text)
+
+# Generar nube de palabras para el texto limpio
+word_freq <- table(unlist(data$clean_text))
+wordcloud2(word_freq, size = 0.5, shape = 'star')
+
+# Generar histograma de la longitud de los tweets
+data$tweet_length <- sapply(data$text, nchar)
+ggplot(data, aes(x = tweet_length)) +
+  geom_histogram(fill = "skyblue", color = "black") +
+  labs(title = "Distribución de la longitud de tweets")
+
+# Visualización de palabras clave más comunes por categoría
+data %>% 
+  group_by(keyword, target) %>% 
+  summarise(count = n()) %>% 
+  arrange(-count) %>% 
+  ggplot(aes(x = reorder(keyword, -count), y = count, fill = factor(target))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  labs(title = "Palabras clave más comunes por categoría")
+
+# Análisis de n-gramas
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+tdm <- TermDocumentMatrix(Corpus(VectorSource(data$text)), control = list(tokenize = BigramTokenizer))
+bigram_freq <- sort(rowSums(as.matrix(tdm)), decreasing = TRUE)
+head(bigram_freq)
+
+# Visualización de bigramas más comunes
+bigram_df <- data.frame(bigram = names(bigram_freq), frequency = bigram_freq)
+ggplot(head(bigram_df, 10), aes(x = reorder(bigram, -frequency), y = frequency)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 10 Bigramas", x = "Bigramas", y = "Frecuencia")
+
+# Análisis de sentimiento (requiere biblioteca `syuzhet`)
+library(syuzhet)
+data$sentiment <- get_sentiment(data$text, method = "bing")
+ggplot(data, aes(x = sentiment)) +
+  geom_histogram(fill = "coral", color = "black") +
+  labs(title = "Distribución de sentimientos en tweets")
+
+
+```
+```{r}
+# Bibliotecas necesarias
+library(ggplot2)
+
+# Leer datos
+data <- read.csv('train_limpios.csv')
+
+# 1. Resumen estadístico básico
+summary(data)
+
+# 2. Revisión de valores faltantes
+missing_values <- sapply(data, function(x) sum(is.na(x)))
+print(missing_values)
+
+# 3. Distribuciones de las variables
+
+# Histograma para visualizar la distribución de la longitud de los tweets
+data$tweet_length <- sapply(data$text, nchar)
+ggplot(data, aes(x = tweet_length)) +
+  geom_histogram(fill = "skyblue", color = "black", bins = 30) +
+  labs(title = "Distribución de la longitud de tweets", x = "Longitud", y = "Frecuencia")
+
+# Visualización de la distribución de la columna 'target' (categoría de tweets: desastre o no desastre)
+ggplot(data, aes(x = factor(target))) +
+  geom_bar(fill = "coral") +
+  labs(title = "Distribución de categoría de tweets", x = "Categoría", y = "Frecuencia")
+
+# 4. Relaciones entre variables
+
+# Si hubiera alguna variable numérica adicional, podríamos usar scatterplots o boxplots para visualizar relaciones.
+# Dado que el conjunto de datos parece principalmente categórico y de texto, nos limitaremos a las distribuciones individuales por ahora.
+
+
+```
+
+```{r}
+# Leer datos
+data <- read.csv('train_limpios.csv')
+
+# 1. Estadísticas descriptivas básicas
+# Para variables numéricas:
+summary(data)
+
+# Si deseas obtener más estadísticas como la mediana, moda, varianza, etc.:
+numeric_columns <- sapply(data, is.numeric)
+numeric_data <- data[, numeric_columns]
+
+statistics <- data.frame(
+  Mean = colMeans(numeric_data, na.rm = TRUE),
+  Median = sapply(numeric_data, median, na.rm = TRUE),
+  Variance = sapply(numeric_data, var, na.rm = TRUE),
+  Standard_Deviation = sapply(numeric_data, sd, na.rm = TRUE)
+)
+print(statistics)
+
+# Para variables categóricas:
+categorical_columns <- sapply(data, is.factor)
+categorical_data <- data[, categorical_columns]
+
+category_levels <- sapply(categorical_data, table)
+print(category_levels)
+
+# 2. Análisis de valores faltantes
+missing_values <- sapply(data, function(x) sum(is.na(x)))
+print(missing_values)
+
+# Porcentaje de datos faltantes por columna
+missing_percentage <- sapply(data, function(x) sum(is.na(x)) / length(x) * 100)
+print(missing_percentage)
+
+# 3. Análisis de outliers (usando el método del rango intercuartil)
+Q1 <- sapply(numeric_data, quantile, probs = 0.25, na.rm = TRUE)
+Q3 <- sapply(numeric_data, quantile, probs = 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+outliers <- lapply(1:ncol(numeric_data), function(column) {
+  return(which(numeric_data[[column]] < lower_bound[column] | numeric_data[[column]] > upper_bound[column]))
+})
+names(outliers) <- names(numeric_data)
+
+# Muestra las filas con outliers para cada columna
+lapply(names(outliers), function(column_name) {
+  return(data[outliers[[column_name]],])
+})
+
+# 4. Correlaciones entre variables numéricas
+correlations <- cor(numeric_data, use = "complete.obs")
+print(correlations)
+
+# 5. Frecuencias de las variables categóricas
+category_frequencies <- sapply(categorical_data, table)
+print(category_frequencies)
+
+
+```
+
 
